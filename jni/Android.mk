@@ -33,6 +33,8 @@ USER_CFLAGS        += -D_FILE_OFFSET_BITS=64
 
 USER_CFLAGS        += -fPIC
 
+USER_CFLAGS        += -D_SIZE_T_DECLARED
+
 # In ZenLib, refer to int128s and int128u implelment
 USER_CFLAGS        += -D__NO_LONG_DOUBLE_MATH
 
