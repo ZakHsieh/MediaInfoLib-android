@@ -4186,6 +4186,7 @@ void File_Mpeg4::moov_trak_mdia_minf_stbl_stsd_xxxxSound()
     else if (Version==2)
     {
         float64 SampleRateF64;
+        int32u  framesPerPacket;
         Skip_B2(                                                "Reserved (0x0003)");
         Skip_B2(                                                "Reserved (0x0010)");
         Skip_B2(                                                "Reserved (0xFFFE)");
@@ -4198,7 +4199,7 @@ void File_Mpeg4::moov_trak_mdia_minf_stbl_stsd_xxxxSound()
         Get_B4 (SampleSize,                                     "Sample size");
         Get_B4 (Flags,                                          "Flags");
         Skip_B4(                                                "Bytes per packet");
-        Skip_B4(                                                "Frames per packet");
+        Get_B4 (framesPerPacket,                                "Frames per packet");
 
         SampleRate=float64_int64s(SampleRateF64);
     }
@@ -4853,10 +4854,10 @@ void File_Mpeg4::moov_trak_mdia_minf_stbl_stsd_xxxx_alac()
     Element_Name("ALAC");
 
     //Parsing
-    int32u  bitrate, samplerate;
+    int32u  bitrate, samplerate, max_sample_per_frame;
     int8u   sample_size, channels;
     Skip_B4(                                                    "?");
-    Skip_B4(                                                    "max sample per frame");
+    Get_B4 (max_sample_per_frame,                               "max sample per frame");
     Skip_B1(                                                    "?");
     Get_B1 (sample_size,                                        "sample size");
     Skip_B1(                                                    "rice history mult");
@@ -4870,6 +4871,8 @@ void File_Mpeg4::moov_trak_mdia_minf_stbl_stsd_xxxx_alac()
     Get_B4 (samplerate,                                         "samplerate");
 
     FILLING_BEGIN_PRECISE();
+        if (max_sample_per_frame)
+            Fill(Stream_Audio, StreamPos_Last, Audio_FrameCount, max_sample_per_frame, 10, true);
         if (sample_size)
             Fill(Stream_Audio, StreamPos_Last, Audio_BitDepth, sample_size, 10, true);
         if (channels)
