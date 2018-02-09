@@ -143,27 +143,29 @@ private:
 ////////////////////////////////////////////////////////////////////////////
 
 extern "C" {
-    JNIEXPORT jstring JNICALL MediaInfo_getById(JNIEnv* pEnv, jobject self, jstring filename, jint streamKind, jint streamNum, jint parameter);
-    JNIEXPORT jstring JNICALL MediaInfo_getByName(JNIEnv* pEnv, jobject self, jstring filename, jint streamKind, jint streamNum, jstring parameter);
-    JNIEXPORT jstring JNICALL MediaInfo_getByIdDetail(JNIEnv* pEnv, jobject self, jstring filename, jint streamKind, jint streamNum, jint parameter, jint kindOfInfo);
-    JNIEXPORT jstring JNICALL MediaInfo_getByNameDetail(JNIEnv* pEnv, jobject self, jstring filename, jint streamKind, jint streamNum, jstring parameter, jint kindOfInfo, jint kindOfSearch);
-    JNIEXPORT jint    JNICALL MediaInfo_countGet(JNIEnv* pEnv, jobject self, jstring filename, jint streamKind, jint streamNum);
+    JNIEXPORT jstring      JNICALL MediaInfo_getById(JNIEnv* pEnv, jobject self, jstring filename, jint streamKind, jint streamNum, jint parameter);
+    JNIEXPORT jstring      JNICALL MediaInfo_getByName(JNIEnv* pEnv, jobject self, jstring filename, jint streamKind, jint streamNum, jstring parameter);
+    JNIEXPORT jobjectArray JNICALL MediaInfo_getByNames(JNIEnv* pEnv, jobject self, jstring filename, jint streamKind, jint streamNum, jobjectArray parameters);
+    JNIEXPORT jstring      JNICALL MediaInfo_getByIdDetail(JNIEnv* pEnv, jobject self, jstring filename, jint streamKind, jint streamNum, jint parameter, jint kindOfInfo);
+    JNIEXPORT jstring      JNICALL MediaInfo_getByNameDetail(JNIEnv* pEnv, jobject self, jstring filename, jint streamKind, jint streamNum, jstring parameter, jint kindOfInfo, jint kindOfSearch);
+    JNIEXPORT jint         JNICALL MediaInfo_countGet(JNIEnv* pEnv, jobject self, jstring filename, jint streamKind, jint streamNum);
 
-    JNIEXPORT jstring JNICALL MediaInfo_getMediaInfo(JNIEnv* pEnv, jobject self, jstring filename);
-    JNIEXPORT jstring JNICALL MediaInfo_getMediaInfoOption(JNIEnv* pEnv, jobject self, jstring param);
+    JNIEXPORT jstring      JNICALL MediaInfo_getMediaInfo(JNIEnv* pEnv, jobject self, jstring filename);
+    JNIEXPORT jstring      JNICALL MediaInfo_getMediaInfoOption(JNIEnv* pEnv, jobject self, jstring param);
 }
 
 const size_t buffsize = 7 * 188 * 1024; //1024 * 1024; //7 * 188; //7 * 188 - magic
 static const char* const kClassName = "org/mediainfo/android/MediaInfo";
 
 static const JNINativeMethod gMethods[] = {
-    { "getById", "(Ljava/lang/String;III)Ljava/lang/String;", (void*)MediaInfo_getById},
-    { "getByName", "(Ljava/lang/String;IILjava/lang/String;)Ljava/lang/String;", (void*)MediaInfo_getByName},
-    { "getByIdDetail", "(Ljava/lang/String;IIII)Ljava/lang/String;", (void*)MediaInfo_getByIdDetail},
-    { "getByNameDetail", "(Ljava/lang/String;IILjava/lang/String;II)Ljava/lang/String;", (void*)MediaInfo_getByNameDetail},
-    { "countGet", "(Ljava/lang/String;II)I", (void*)MediaInfo_countGet},
-    { "getMediaInfo", "(Ljava/lang/String;)Ljava/lang/String;", (void*)MediaInfo_getMediaInfo},
-    { "getMediaInfoOption", "(Ljava/lang/String;)Ljava/lang/String;", (void*)MediaInfo_getMediaInfoOption},
+    { "getById", "(Ljava/lang/String;III)Ljava/lang/String;", (void*)MediaInfo_getById },
+    { "getByName", "(Ljava/lang/String;IILjava/lang/String;)Ljava/lang/String;", (void*)MediaInfo_getByName },
+    { "getByNames", "(Ljava/lang/String;II[Ljava/lang/String;)[Ljava/lang/String;", (void*)MediaInfo_getByNames },
+    { "getByIdDetail", "(Ljava/lang/String;IIII)Ljava/lang/String;", (void*)MediaInfo_getByIdDetail },
+    { "getByNameDetail", "(Ljava/lang/String;IILjava/lang/String;II)Ljava/lang/String;", (void*)MediaInfo_getByNameDetail },
+    { "countGet", "(Ljava/lang/String;II)I", (void*)MediaInfo_countGet },
+    { "getMediaInfo", "(Ljava/lang/String;)Ljava/lang/String;", (void*)MediaInfo_getMediaInfo },
+    { "getMediaInfoOption", "(Ljava/lang/String;)Ljava/lang/String;", (void*)MediaInfo_getMediaInfoOption },
 };
 
 JNIEXPORT jint JNICALL
@@ -505,6 +507,90 @@ MediaInfo_getByName(JNIEnv* pEnv, jobject self, jstring filename, jint streamKin
         CastStreamKind(streamKind), streamNum, PrintableChars(cstr.c_str()), PrintableChars2(strInfo.c_str()), strInfo.length());
 
     return NewJString(pEnv, strInfo);
+}
+
+JNIEXPORT jobjectArray JNICALL
+MediaInfo_getByNames(JNIEnv* pEnv, jobject self, jstring filename, jint streamKind, jint streamNum, jobjectArray parameters)
+{
+    FuncCallLog funclog(FUNC);
+
+    const char *cfilename = (pEnv)->GetStringUTFChars(filename, NULL);
+    // From: preparing an example file for reading
+    FILE *F = fopen(cfilename, "rb"); //You can use something else than a file
+    if (F == 0) {
+        LOGW("getByNames: Error opening file...");
+
+        return NULL;
+    }
+    int stringCount = pEnv->GetArrayLength(parameters);
+
+    if (stringCount == 0) {
+        LOGW("getByNames: Invalid parameters array!");
+
+        return NULL;
+    }
+    jstring jstringArray[stringCount];
+    jclass stringClass = pEnv->FindClass("java/lang/String");
+    jobjectArray valueArray = pEnv->NewObjectArray(stringCount, stringClass, NULL);
+
+    for (int i = 0; i < stringCount; i++) {
+        jstringArray[i] = (jstring)(pEnv->GetObjectArrayElement(parameters, i));
+    }
+    // From: preparing a memory buffer for reading
+    unsigned char* From_Buffer = new unsigned char[buffsize]; //Note: you can do your own buffer
+    size_t From_Buffer_Size; // The size of the read file buffer
+
+    // From: retrieving file size
+    long long F_Size = fseek_64(F, 0, SEEK_END);
+
+    fseek_64(F, 0, SEEK_SET);
+    // Initializing MediaInfo
+    MediaInfo MI;
+    //Preparing to fill MediaInfo with a buffer
+    MI.Open_Buffer_Init(F_Size, 0);
+
+    // The parsing loop
+    bool isCanceled = false;
+
+    do {
+        // Reading data somewhere, do what you want for this.
+        From_Buffer_Size = fread(From_Buffer, 1, buffsize, F);
+        // Sending the buffer to MediaInfo
+        size_t Status = MI.Open_Buffer_Continue(From_Buffer, From_Buffer_Size);
+
+        if (Status & 0x08) { // Bit3=Finished
+            break;
+        }
+        isCanceled = IsCanceled(pEnv, self);
+        if (isCanceled) {
+            LOGD("MediaInfo_getByName() IsCanceled = '%s'\n", "True");
+            break;
+        }
+        // Testing if there is a MediaInfo request to go elsewhere
+        if (MI.Open_Buffer_Continue_GoTo_Get() != (MediaInfo_int64u) -1) {
+            //fseek(F, (long) MI.Open_Buffer_Continue_GoTo_Get(), SEEK_SET); // Position the file
+            //MI.Open_Buffer_Init(F_Size, ftell(F)); // Informing MediaInfo we have seek
+            MI.Open_Buffer_Init(F_Size, fseek_64(F, MI.Open_Buffer_Continue_GoTo_Get(), SEEK_SET));
+        }
+    } while (From_Buffer_Size > 0);
+    // Finalizing
+    MI.Open_Buffer_Finalize(); // This is the end of the stream, MediaInfo must finnish some work
+
+    for (int i = 0; i < stringCount; i++) {
+        String cstr = NewString(pEnv, jstringArray[i]);
+        String strInfo = MI.Get(CastStreamKind(streamKind), streamNum, cstr);
+        jstring jstringInfo = NewJString(pEnv, strInfo);
+
+        pEnv->SetObjectArrayElement(valueArray, i, jstringInfo);
+        pEnv->DeleteLocalRef(jstringInfo);
+    }
+    pEnv->DeleteLocalRef(stringClass);
+
+    fclose(F);
+
+    delete [] From_Buffer;
+
+    return valueArray;
 }
 
 JNIEXPORT jstring JNICALL
